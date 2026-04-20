@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface FinalMileInputs {
+  businessType: 'COMMERCIAL' | 'RESIDENTIAL'
   stops: number
   miles: number
   minPerStop: number
@@ -32,6 +33,7 @@ interface CalculationResults {
 }
 
 const defaultInputs: FinalMileInputs = {
+  businessType: 'COMMERCIAL',
   stops: 8,
   miles: 95,
   minPerStop: 35,
@@ -188,6 +190,49 @@ export default function FinalMileCalculator() {
           </svg>
           <span>Save Quote</span>
         </button>
+      </div>
+
+      <div className="bg-white rounded-lg border-2 border-blue-200 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-gray-900">Business Type</h3>
+            <p className="text-sm text-gray-600">Select the type of delivery service</p>
+          </div>
+          <div className="flex rounded-lg border-2 border-gray-300 overflow-hidden">
+            <button
+              onClick={() => setInputs({ 
+                ...inputs, 
+                businessType: 'COMMERCIAL',
+                minPerStop: 35,
+                quotedRate: 95,
+                overhead: 65,
+              })}
+              className={`px-6 py-2 font-semibold transition-colors ${
+                inputs.businessType === 'COMMERCIAL'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              🏢 Commercial
+            </button>
+            <button
+              onClick={() => setInputs({ 
+                ...inputs, 
+                businessType: 'RESIDENTIAL',
+                minPerStop: 45,
+                quotedRate: 125,
+                overhead: 55,
+              })}
+              className={`px-6 py-2 font-semibold transition-colors border-l-2 border-gray-300 ${
+                inputs.businessType === 'RESIDENTIAL'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              🏠 Residential
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

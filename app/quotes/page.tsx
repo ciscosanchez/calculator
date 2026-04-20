@@ -9,8 +9,8 @@ interface Quote {
   customerName: string | null
   calculatorType: string
   totalCost: number
-  revenue: number
-  margin: number
+  totalPrice: number
+  marginPercent: number
   status: string
   createdAt: string
   user: {
@@ -25,10 +25,16 @@ export default function QuotesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [calculatorFilter, setCalculatorFilter] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   useEffect(() => {
     fetchQuotes()
   }, [])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, statusFilter, calculatorFilter])
 
   const fetchQuotes = async () => {
     try {
@@ -53,6 +59,11 @@ export default function QuotesPage() {
     return matchesSearch && matchesStatus && matchesCalculator
   })
 
+  const totalPages = Math.ceil(filteredQuotes.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedQuotes = filteredQuotes.slice(startIndex, endIndex)
+
   const stats = {
     total: quotes.length,
     thisMonth: quotes.filter(q => {
@@ -61,7 +72,7 @@ export default function QuotesPage() {
       return quoteDate.getMonth() === now.getMonth() && 
              quoteDate.getFullYear() === now.getFullYear()
     }).length,
-    totalValue: quotes.reduce((sum, q) => sum + q.revenue, 0)
+    totalValue: quotes.reduce((sum, q) => sum + q.totalPrice, 0)
   }
 
   const getMarginColor = (margin: number) => {
@@ -76,6 +87,47 @@ export default function QuotesPage() {
       case 'SENT': return 'bg-blue-100 text-blue-800'
       case 'REJECTED': return 'bg-red-100 text-red-800'
       default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const handleDelete = async (quoteId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm('Are you sure you want to delete this quote?')) return
+
+    try {
+      const res = await fetch(`/api/quotes/${quoteId}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        setQuotes(quotes.filter(q => q.id !== quoteId))
+      }
+    } catch (error) {
+      console.error('Failed to delete quote:', error)
+    }
+  }
+
+  const handleDuplicate = async (quote: Quote, e: React.MouseEvent) => {
+    e.stopPropagation()
+    
+    try {
+      const res = await fetch('/api/quotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          calculatorType: quote.calculatorType,
+          projectName: `${quote.projectName} (Copy)`,
+          customerName: quote.customerName,
+          inputs: {},
+          totalCost: quote.totalCost,
+          totalPrice: quote.totalPrice,
+          marginPercent: quote.marginPercent,
+        }),
+      })
+      if (res.ok) {
+        fetchQuotes()
+      }
+    } catch (error) {
+      console.error('Failed to duplicate quote:', error)
     }
   }
 
@@ -190,11 +242,16 @@ export default function QuotesPage() {
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Margin</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredQuotes.map((quote) => (
-                  <tr key={quote.id} className="hover:bg-gray-50 cursor-pointer">
+                {paginatedQuotes.map((quote) => (
+                  <tr 
+                    key={quote.id} 
+                    onClick={() => window.location.href = `/quotes/${quote.id}`}
+                    className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">{quote.projectName}</div>
                       <div className="text-sm text-gray-500">{quote.user.name || quote.user.email}</div>
@@ -209,11 +266,11 @@ export default function QuotesPage() {
                       ${quote.totalCost.toLocaleString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      ${quote.revenue.toLocaleString()}
+                      ${quote.totalPrice.toLocaleString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`text-sm font-semibold ${getMarginColor(quote.margin)}`}>
-                        {quote.margin.toFixed(1)}%
+                      <span className={`text-sm font-semibold ${getMarginColor(quote.marginPercent)}`}>
+                        {quote.marginPercent.toFixed(1)}%
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -224,10 +281,99 @@ export default function QuotesPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(quote.createdAt).toLocaleDateString()}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/quotes/${quote.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-blue-600 hover:text-blue-800 font-medium"
+                          title="View"
+                        >
+                          View
+                        </Link>
+                        <button
+                          onClick={(e) => handleDuplicate(quote, e)}
+                          className="text-green-600 hover:text-green-800 font-medium"
+                          title="Duplicate"
+                        >
+                          Duplicate
+                        </button>
+                        <button
+                          onClick={(e) => handleDelete(quote.id, e)}
+                          className="text-red-600 hover:text-red-800 font-medium"
+                          title="Delete"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {filteredQuotes.length > 0 && totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              Showing {startIndex + 1} to {Math.min(endIndex, filteredQuotes.length)} of {filteredQuotes.length} quotes
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                First
+              </button>
+              <button
+                onClick={() => setCurrentPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(page => {
+                    return page === 1 || 
+                           page === totalPages || 
+                           Math.abs(page - currentPage) <= 1
+                  })
+                  .map((page, idx, arr) => (
+                    <div key={page} className="flex items-center">
+                      {idx > 0 && arr[idx - 1] !== page - 1 && (
+                        <span className="px-2 text-gray-500">...</span>
+                      )}
+                      <button
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                          currentPage === page
+                            ? 'bg-blue-600 text-white'
+                            : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    </div>
+                  ))}
+              </div>
+              <button
+                onClick={() => setCurrentPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Last
+              </button>
+            </div>
           </div>
         )}
       </div>
