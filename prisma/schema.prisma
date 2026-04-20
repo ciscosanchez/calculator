@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  domain      String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  locations   Location[]
+  users       User[]
+  quotes      Quote[]
+  
+  @@index([slug])
+  @@map("tenants")
+}
+
+model Location {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  address     String?
+  city        String?
+  state       String?
+  zipCode     String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  costs       LocationCost[]
+  quotes      Quote[]
+  
+  @@index([tenantId])
+  @@map("locations")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  USER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  tenantId      String
+  email         String    @unique
+  name          String?
+  passwordHash  String
+  role          Role      @default(USER)
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quotes        Quote[]
+  auditLogs     AuditLog[]
+  
+  @@index([tenantId])
+  @@index([email])
+  @@map("users")
+}
+
+enum CostCategory {
+  LABOR
+  EQUIPMENT
+  OVERHEAD
+  MATERIAL
+}
+
+model CostTemplate {
+  id          String       @id @default(cuid())
+  category    CostCategory
+  name        String
+  description String?
+  baseValue   Float
+  unit        String
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  overrides   LocationCost[]
+  
+  @@index([category])
+  @@map("cost_templates")
+}
+
+model LocationCost {
+  id             String       @id @default(cuid())
+  locationId     String
+  templateId     String
+  overrideValue  Float
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  location       Location     @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  template       CostTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  
+  @@unique([locationId, templateId])
+  @@index([locationId])
+  @@index([templateId])
+  @@map("location_costs")
+}
+
+enum BusinessType {
+  COMMERCIAL
+  RESIDENTIAL
+}
+
+enum CalculatorType {
+  FINAL_MILE
+  INSTALLATION_SERVICES
+  PALLET_HANDLING
+  WAREHOUSE_STORAGE
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+model Quote {
+  id               String         @id @default(cuid())
+  tenantId         String
+  locationId       String
+  userId           String
+  quoteNumber      String         @unique
+  calculatorType   CalculatorType
+  businessType     BusinessType   @default(COMMERCIAL)
+  status           QuoteStatus    @default(DRAFT)
+  customerName     String?
+  customerEmail    String?
+  customerPhone    String?
+  projectName      String?
+  notes            String?
+  validUntil       DateTime?
+  totalCost        Float          @default(0)
+  marginPercent    Float?
+  totalPrice       Float          @default(0)
+  metadata         Json?
+  netsuiteId       String?
+  exportedAt       DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location         Location       @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  user             User           @relation(fields: [userId], references: [id])
+  lineItems        QuoteLineItem[]
+  
+  @@index([tenantId])
+  @@index([locationId])
+  @@index([userId])
+  @@index([quoteNumber])
+  @@index([status])
+  @@index([createdAt])
+  @@map("quotes")
+}
+
+model QuoteLineItem {
+  id          String   @id @default(cuid())
+  quoteId     String
+  description String
+  quantity    Float
+  unit        String
+  unitCost    Float
+  totalCost   Float
+  sortOrder   Int      @default(0)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  
+  @@index([quoteId])
+  @@map("quote_line_items")
+}
+
+enum ActionType {
+  CREATE
+  UPDATE
+  DELETE
+  EXPORT
+  LOGIN
+}
+
+model AuditLog {
+  id          String     @id @default(cuid())
+  userId      String
+  action      ActionType
+  entity      String
+  entityId    String?
+  changes     Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime   @default(now())
+
+  user        User       @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
