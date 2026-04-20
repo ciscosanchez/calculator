@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth()
 
@@ -20,8 +20,10 @@ export async function GET(
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
+  const { id } = await params
+
   const quote = await prisma.quote.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       user: {
         select: {
@@ -53,7 +55,7 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth()
 
@@ -69,8 +71,10 @@ export async function PUT(
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
+  const { id } = await params
+
   const existingQuote = await prisma.quote.findUnique({
-    where: { id: params.id },
+    where: { id },
   })
 
   if (!existingQuote) {
@@ -96,7 +100,7 @@ export async function PUT(
   } = body
 
   const quote = await prisma.quote.update({
-    where: { id: params.id },
+    where: { id },
     data: {
       projectName,
       customerName,
@@ -132,7 +136,7 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth()
 
@@ -148,8 +152,10 @@ export async function DELETE(
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
+  const { id } = await params
+
   const existingQuote = await prisma.quote.findUnique({
-    where: { id: params.id },
+    where: { id },
   })
 
   if (!existingQuote) {
@@ -161,7 +167,7 @@ export async function DELETE(
   }
 
   await prisma.quote.delete({
-    where: { id: params.id },
+    where: { id },
   })
 
   return NextResponse.json({ success: true })
