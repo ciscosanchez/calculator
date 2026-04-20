@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 interface FinalMileInputs {
   stops: number
@@ -47,6 +48,10 @@ const defaultInputs: FinalMileInputs = {
 export default function FinalMileCalculator() {
   const [inputs, setInputs] = useState<FinalMileInputs>(defaultInputs)
   const [results, setResults] = useState<CalculationResults | null>(null)
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [saveData, setSaveData] = useState({ projectName: '', customerName: '', notes: '' })
+  const [saving, setSaving] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
     calculateResults()
@@ -122,14 +127,67 @@ export default function FinalMileCalculator() {
     return `✗ Below break-even. Losing ${formatCurrency(Math.abs(results.profit))} on this route. Minimum viable: ${formatCurrency(results.breakEvenPerStop)}/stop. Target: ${formatCurrency(results.targetRate)}/stop.`
   }
 
+  const handleSaveQuote = async () => {
+    if (!results || !saveData.projectName) return
+
+    setSaving(true)
+    try {
+      const response = await fetch('/api/quotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          calculatorType: 'FINAL_MILE',
+          projectName: saveData.projectName,
+          customerName: saveData.customerName || null,
+          inputs: inputs,
+          totalCost: results.totalCost,
+          revenue: results.revenue,
+          margin: results.margin,
+          notes: saveData.notes || null,
+          lineItems: [
+            { description: 'Labor Cost', category: 'LABOR', quantity: results.totalHours, rate: inputs.laborRate * inputs.crewSize, amount: results.laborCost },
+            { description: 'Fuel Cost', category: 'FUEL', quantity: inputs.miles, rate: inputs.fuelCostPerMile, amount: results.fuelCost },
+            { description: 'Truck Operating Cost', category: 'EQUIPMENT', quantity: inputs.miles, rate: inputs.truckCostPerMile, amount: results.truckCost },
+            { description: 'Overhead Allocation', category: 'OVERHEAD', quantity: 1, rate: inputs.overhead, amount: inputs.overhead },
+          ]
+        })
+      })
+
+      if (response.ok) {
+        setShowSaveModal(false)
+        setSaveData({ projectName: '', customerName: '', notes: '' })
+        router.push('/quotes')
+      } else {
+        alert('Failed to save quote. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error saving quote:', error)
+      alert('Failed to save quote. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center space-x-3">
-        <span className="text-4xl">🚛</span>
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Final Mile Delivery</h1>
-          <p className="text-gray-600">Live Pricing Calculator</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <span className="text-4xl">🚛</span>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Final Mile Delivery</h1>
+            <p className="text-gray-600">Live Pricing Calculator</p>
+          </div>
         </div>
+        <button
+          onClick={() => setShowSaveModal(true)}
+          disabled={!results}
+          className="px-6 py-2.5 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-2"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+          </svg>
+          <span>Save Quote</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -317,6 +375,83 @@ export default function FinalMileCalculator() {
           </div>
         </div>
       </div>
+
+      {showSaveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Save Quote</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  Project Name *
+                </label>
+                <input
+                  type="text"
+                  value={saveData.projectName}
+                  onChange={(e) => setSaveData({ ...saveData, projectName: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                  placeholder="e.g., Atlanta Metro Final Mile"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  Customer Name
+                </label>
+                <input
+                  type="text"
+                  value={saveData.customerName}
+                  onChange={(e) => setSaveData({ ...saveData, customerName: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                  placeholder="e.g., Acme Corp"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  Notes
+                </label>
+                <textarea
+                  value={saveData.notes}
+                  onChange={(e) => setSaveData({ ...saveData, notes: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                  placeholder="Add any additional notes..."
+                />
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Total Cost:</span>
+                  <span className="font-semibold">{results ? formatCurrency(results.totalCost) : '$0'}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Revenue:</span>
+                  <span className="font-semibold">{results ? formatCurrency(results.revenue) : '$0'}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Margin:</span>
+                  <span className={`font-semibold ${results && results.margin >= 20 ? 'text-green-600' : results && results.margin >= 0 ? 'text-yellow-600' : 'text-red-600'}`}>
+                    {results ? `${results.margin.toFixed(1)}%` : '0%'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex space-x-3 mt-6">
+              <button
+                onClick={() => setShowSaveModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveQuote}
+                disabled={!saveData.projectName || saving}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Saving...' : 'Save Quote'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

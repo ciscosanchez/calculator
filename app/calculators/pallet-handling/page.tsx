@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 interface PalletInputs {
   palletCount: number
@@ -39,8 +40,16 @@ const defaultInputs: PalletInputs = {
 }
 
 export default function PalletHandlingCalculator() {
+  const router = useRouter()
   const [inputs, setInputs] = useState<PalletInputs>(defaultInputs)
   const [results, setResults] = useState<CalculationResults | null>(null)
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveData, setSaveData] = useState({
+    projectName: '',
+    customerName: '',
+    notes: ''
+  })
 
   useEffect(() => {
     calculateResults()
@@ -74,6 +83,46 @@ export default function PalletHandlingCalculator() {
     setInputs({ ...inputs, [field]: value })
   }
 
+  const handleSaveQuote = async () => {
+    if (!results || !saveData.projectName) return
+
+    setSaving(true)
+    try {
+      const response = await fetch('/api/quotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          calculatorType: 'PALLET_HANDLING',
+          projectName: saveData.projectName,
+          customerName: saveData.customerName || null,
+          inputs: inputs,
+          totalCost: results.totalCost,
+          totalPrice: results.revenue,
+          marginPercent: results.margin,
+          notes: saveData.notes || null,
+          lineItems: [
+            { description: 'Labor Cost', quantity: results.totalHours, unitCost: inputs.laborRate, totalCost: results.laborCost, unit: 'hrs' },
+            { description: 'Equipment Cost', quantity: results.totalHours, unitCost: inputs.equipmentRate, totalCost: results.equipmentCost, unit: 'hrs' },
+            { description: 'Storage Cost', quantity: inputs.palletCount * inputs.storageTime, unitCost: inputs.storageCostPerPallet, totalCost: results.storageCost, unit: 'pallet-days' },
+          ]
+        })
+      })
+
+      if (response.ok) {
+        setShowSaveModal(false)
+        setSaveData({ projectName: '', customerName: '', notes: '' })
+        router.push('/quotes')
+      } else {
+        alert('Failed to save quote. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error saving quote:', error)
+      alert('Failed to save quote. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -92,12 +141,21 @@ export default function PalletHandlingCalculator() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center space-x-3">
-        <span className="text-4xl">📦</span>
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Pallet Handling & Storage</h1>
-          <p className="text-gray-600">Calculate handling and storage costs</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <span className="text-4xl">📦</span>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Pallet Handling & Storage</h1>
+            <p className="text-gray-600">Calculate handling and storage costs</p>
+          </div>
         </div>
+        <button
+          onClick={() => setShowSaveModal(true)}
+          disabled={!results}
+          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+        >
+          Save Quote
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -273,6 +331,90 @@ export default function PalletHandlingCalculator() {
           )}
         </div>
       </div>
+
+      {showSaveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Save Quote</h2>
+            
+            {results && (
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Cost:</span>
+                  <span className="font-semibold">${results.totalCost.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Revenue:</span>
+                  <span className="font-semibold">${results.revenue.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Margin:</span>
+                  <span className={`font-semibold ${results.margin >= 20 ? 'text-green-600' : results.margin >= 10 ? 'text-yellow-600' : 'text-red-600'}`}>
+                    {results.margin.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Project Name *
+                </label>
+                <input
+                  type="text"
+                  value={saveData.projectName}
+                  onChange={(e) => setSaveData({ ...saveData, projectName: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g., ABC Warehouse Pallet Handling"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Customer Name
+                </label>
+                <input
+                  type="text"
+                  value={saveData.customerName}
+                  onChange={(e) => setSaveData({ ...saveData, customerName: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Optional"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Notes
+                </label>
+                <textarea
+                  value={saveData.notes}
+                  onChange={(e) => setSaveData({ ...saveData, notes: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Optional"
+                />
+              </div>
+
+              <div className="flex space-x-3 pt-2">
+                <button
+                  onClick={() => setShowSaveModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveQuote}
+                  disabled={!saveData.projectName || saving}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {saving ? 'Saving...' : 'Save Quote'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
