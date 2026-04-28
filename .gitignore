@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+
+# env files — never commit secrets
+.env
+.env.local
+.env*.local
+
+# build info
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# os
+.DS_Store
+
+# misc
+*.pptx
+*.xlsx
+*.html
